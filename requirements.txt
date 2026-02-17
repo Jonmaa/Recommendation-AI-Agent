@@ -1,0 +1,6 @@
+openai==2.21.0
+faiss-cpu==1.13.2
+numpy==2.4.2
+sentence-transformers==5.2.2
+python-dotenv==1.2.1
+rich==14.3.2
