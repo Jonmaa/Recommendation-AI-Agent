@@ -1,6 +1,6 @@
 # AI Product Recommendation Agent
 
-An intelligent product recommendation system that uses **RAG (Retrieval-Augmented Generation)** with **FAISS** vector search and **Groq** (Llama 3.3 70B) to suggest products based on collaborative purchase patterns.
+An intelligent product recommendation system that uses **RAG (Retrieval-Augmented Generation)** with **FAISS** vector search and **Groq** (Llama 3.3 70B) to suggest products based on collaborative purchase patterns. API calls are built on the **OpenAI SDK**, pointing to Groq's OpenAI-compatible endpoint.
 
 ## How It Works
 
