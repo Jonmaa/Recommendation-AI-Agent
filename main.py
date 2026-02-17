@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.markdown import Markdown
 
-from database import get_all_products, get_product, PRODUCTS
+from database import get_all_products, get_product, get_user_by_name, PRODUCTS
 from vector_store import ProductVectorStore
 from recommendation_agent import RecommendationAgent
 
@@ -52,6 +52,7 @@ def display_help() -> None:
 |---------|-------------|
 | `catalog` | Show all products |
 | `buy <product_id>` | Buy a product and get recommendations |
+| `purchases` | Show your purchase history |
 | `search <query>` | Search for products by keyword |
 | `chat <message>` | Ask the agent a question |
 | `reset` | Reset conversation history |
@@ -94,7 +95,7 @@ def main():
     console.print(
         Panel.fit(
             "[bold blue]AI Product Recommendation Agent[/bold blue]\n"
-            "[dim]Powered by RAG + FAISS + OpenAI[/dim]",
+            "[dim]Powered by RAG + FAISS + Groq[/dim]",
             border_style="blue",
         )
     )
@@ -115,11 +116,21 @@ def main():
     # Initialize the recommendation agent
     agent = RecommendationAgent(vector_store)
 
-    # User session
-    user_id = "U100"
+    # User session — look up or create user by name
     username = Prompt.ask("\n[bold]Enter your name", default="User")
 
-    console.print(f"\nWelcome, [bold green]{username}[/bold green]! Type [cyan]help[/cyan] for commands.\n")
+    existing_user = get_user_by_name(username)
+    if existing_user:
+        purchased_names = [PRODUCTS[pid].name for pid in existing_user.purchased_product_ids if pid in PRODUCTS]
+        console.print(
+            f"\nWelcome back, [bold green]{username}[/bold green]! "
+            f"(ID: {existing_user.user_id})\n"
+            f"[dim]Your previous purchases: {', '.join(purchased_names)}[/dim]\n"
+        )
+    else:
+        console.print(f"\nWelcome, [bold green]{username}[/bold green]! You're a new user.\n")
+
+    console.print(f"Type [cyan]help[/cyan] for commands.\n")
 
     # --- Interactive Loop ---
     while True:
@@ -146,6 +157,25 @@ def main():
         elif command == "catalog":
             display_product_catalog()
 
+        elif command == "purchases":
+            user = get_user_by_name(username)
+            if not user or not user.purchased_product_ids:
+                console.print("[yellow]You haven't bought anything yet.[/yellow]")
+            else:
+                table = Table(title=f"{username}'s Purchases", show_lines=True)
+                table.add_column("ID", style="cyan", width=6)
+                table.add_column("Name", style="bold white", width=35)
+                table.add_column("Category", style="green", width=12)
+                table.add_column("Price", style="yellow", justify="right", width=10)
+                total = 0.0
+                for pid in user.purchased_product_ids:
+                    p = PRODUCTS.get(pid)
+                    if p:
+                        table.add_row(p.id, p.name, p.category, f"${p.price:.2f}")
+                        total += p.price
+                table.add_row("", "[bold]TOTAL[/bold]", "", f"[bold]${total:.2f}[/bold]")
+                console.print(table)
+
         elif command == "buy":
             if not args:
                 console.print("[yellow]Usage: buy <product_id>  (e.g., buy P001)[/yellow]")
@@ -165,7 +195,7 @@ def main():
             console.print("[dim]Generating recommendations...[/dim]\n")
 
             try:
-                recommendation = agent.recommend_after_purchase(user_id, username, product_id)
+                recommendation = agent.recommend_after_purchase(username, product_id)
                 console.print(Panel(
                     Markdown(recommendation),
                     title="[bold blue]AI Recommendation[/bold blue]",

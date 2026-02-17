@@ -8,7 +8,8 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, List
-import random
+import re
+import os
 
 
 @dataclass
@@ -155,36 +156,23 @@ for p in _raw_products:
 # ----------------------------------------------------------------
 
 USER_PURCHASES: List[UserPurchase] = [
-    # Fitness enthusiast — footwear + gym gear + supplements
     UserPurchase("U001", "Alex", ["P001", "P005", "P006", "P016", "P022", "P024"]),
-    # Runner — running shoes + nutrition + tech
     UserPurchase("U002", "Maria", ["P001", "P002", "P018", "P024", "P025"]),
-    # Casual lifestyle — sneakers + food + reading
     UserPurchase("U003", "James", ["P001", "P003", "P017", "P019", "P028"]),
-    # Cross-training athlete — gym shoes + weights + nutrition
     UserPurchase("U004", "Sofia", ["P005", "P006", "P007", "P008", "P016", "P022"]),
-    # Team sports player — balls + nutrition + footwear
     UserPurchase("U005", "Carlos", ["P001", "P011", "P012", "P016", "P018"]),
-    # Tech-savvy runner — running shoes + tech gadgets
     UserPurchase("U006", "Emma", ["P002", "P023", "P024", "P026", "P027"]),
-    # Yoga & wellness — yoga gear + healthy food + lifestyle sneakers
     UserPurchase("U007", "Liam", ["P003", "P009", "P010", "P017", "P021"]),
-    # Basketball fan — basketball + footwear + protein
     UserPurchase("U008", "Olivia", ["P001", "P004", "P012", "P015", "P016"]),
-    # Home gym builder — all weights + training shoes + supplements
     UserPurchase("U009", "Noah", ["P005", "P006", "P007", "P008", "P009", "P016", "P022"]),
-    # Tech & productivity — tech gadgets + healthy food
     UserPurchase("U010", "Ava", ["P023", "P026", "P028", "P029", "P030", "P021"]),
-    # All-round sportsman — sneakers + multiple balls + fitness tracker
     UserPurchase("U011", "Ethan", ["P001", "P002", "P011", "P013", "P014", "P025"]),
-    # Boxing & fitness — boxing gloves + training + nutrition
     UserPurchase("U012", "Mia", ["P004", "P015", "P009", "P016", "P018", "P022"]),
-    # Outdoor adventurer — action camera + running watch + energy bars
     UserPurchase("U013", "Lucas", ["P002", "P024", "P027", "P018", "P005"]),
-    # Healthy eater — assorted food items + yoga + e-reader
     UserPurchase("U014", "Isabella", ["P010", "P017", "P019", "P020", "P021", "P028"]),
-    # Sneaker collector — multiple sneakers + casual tech
     UserPurchase("U015", "Mason", ["P001", "P002", "P003", "P004", "P023", "P026"]),
+    UserPurchase("U016", "Jon", ["P028", "P027", "P017"]),
+    UserPurchase("U017", "Albert", ["P001"]),
 ]
 
 
@@ -220,14 +208,80 @@ def get_users_who_bought(product_id: str) -> List[UserPurchase]:
     return [u for u in USER_PURCHASES if product_id in u.purchased_product_ids]
 
 
-def add_purchase(user_id: str, username: str, product_id: str) -> UserPurchase:
-    """Record a new purchase. Creates the user if they don't exist."""
+def get_user_by_name(username: str) -> UserPurchase | None:
+    """Find an existing user by their username (case-insensitive)."""
     for user in USER_PURCHASES:
-        if user.user_id == user_id:
-            if product_id not in user.purchased_product_ids:
-                user.purchased_product_ids.append(product_id)
+        if user.username.lower() == username.lower():
             return user
+    return None
 
-    new_user = UserPurchase(user_id, username, [product_id])
+
+def _generate_user_id() -> str:
+    """Generate the next available user ID (e.g., U016, U017, ...)."""
+    max_num = 0
+    for user in USER_PURCHASES:
+        num = int(user.user_id[1:])  # Extract number from "U001"
+        if num > max_num:
+            max_num = num
+    return f"U{max_num + 1:03d}"
+
+
+def add_purchase(username: str, product_id: str) -> UserPurchase:
+    """
+    Record a new purchase. Looks up the user by name.
+    If the user doesn't exist, creates a new one with an auto-generated ID.
+    Returns the user with the updated purchase list.
+    Automatically persists changes to this source file.
+    """
+    user = get_user_by_name(username)
+
+    if user:
+        if product_id not in user.purchased_product_ids:
+            user.purchased_product_ids.append(product_id)
+        _save_purchases_to_source()
+        return user
+
+    new_id = _generate_user_id()
+    new_user = UserPurchase(new_id, username, [product_id])
     USER_PURCHASES.append(new_user)
+    _save_purchases_to_source()
     return new_user
+
+
+# ----------------------------------------------------------------
+# Persistence — rewrite USER_PURCHASES block in this source file
+# ----------------------------------------------------------------
+
+_THIS_FILE = os.path.abspath(__file__)
+
+
+def _save_purchases_to_source() -> None:
+    """
+    Rewrite the USER_PURCHASES list in database.py so that new
+    users and purchases persist across restarts without any
+    external files.
+    """
+    # Build the new USER_PURCHASES block
+    lines = [
+        "USER_PURCHASES: List[UserPurchase] = [",
+    ]
+    for user in USER_PURCHASES:
+        ids_str = ", ".join(f'"{pid}"' for pid in user.purchased_product_ids)
+        lines.append(
+            f'    UserPurchase("{user.user_id}", "{user.username}", [{ids_str}]),'
+        )
+    lines.append("]")
+    new_block = "\n".join(lines)
+
+    # Read current file content
+    with open(_THIS_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Replace the USER_PURCHASES block using regex
+    # Matches from "USER_PURCHASES: List[UserPurchase] = [" to the closing "]"
+    pattern = r"USER_PURCHASES: List\[UserPurchase\] = \[.*?^\]"
+    new_content = re.sub(pattern, new_block, content, count=1, flags=re.DOTALL | re.MULTILINE)
+
+    # Write back
+    with open(_THIS_FILE, "w", encoding="utf-8") as f:
+        f.write(new_content)

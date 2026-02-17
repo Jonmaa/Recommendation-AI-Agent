@@ -71,7 +71,7 @@ class RecommendationAgent:
     # ----------------------------------------------------------------
 
     def recommend_after_purchase(
-        self, user_id: str, username: str, product_id: str
+        self, username: str, product_id: str
     ) -> str:
         """
         Main entry point: processes a purchase and returns
@@ -88,7 +88,7 @@ class RecommendationAgent:
         if not product:
             return f"Error: Product '{product_id}' not found in catalog."
 
-        add_purchase(user_id, username, product_id)
+        add_purchase(username, product_id)
 
         # Step 2 — RAG Retrieval via FAISS
         rag_context = self.vector_store.retrieve_context_for_product(
